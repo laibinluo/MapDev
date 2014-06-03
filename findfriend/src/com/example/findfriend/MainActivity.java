@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
 	public BDLocationListener myListener = new MyLocationListener();
 	
 	//我的位置覆盖物  
-	private MyLocationOverlay myOverlay; 
+	private MyLocationOverlay myLocationOverlay; 
 	//位置在图层中的索引  
 	private int myOverlayIndex=0;
 	//是否定位到我的位置 
@@ -54,7 +54,8 @@ public class MainActivity extends Activity {
 		////////////////////////定位功能代码开始
 		mLocationClient=new LocationClient(getApplicationContext());
 		
-		myOverlay=new MyLocationOverlay(mMapView);
+		myLocationOverlay=new MyLocationOverlay(mMapView);
+
 		LocationClientOption option=new LocationClientOption();
 		option.setOpenGps(true);
 		option.setAddrType("all");//返回的定位结果包含地址信息 
@@ -114,14 +115,19 @@ public class MainActivity extends Activity {
 	          return ;
 	      setLocationInfo(location, false);
 	      
-	      MyLocationOverlay myLocationOverlay = new MyLocationOverlay(mMapView);  
+	       
 	      LocationData locData = new LocationData();
 	      
 	      locData.latitude = location.getLatitude();
 	      locData.longitude = location.getLongitude();
 	      locData.direction = 2.0f;
 	      myLocationOverlay.setData(locData); 
-	      mMapView.getOverlays().add(myLocationOverlay); 
+	      if(mMapView.getOverlays().contains(myLocationOverlay)){
+	    	   mMapView.getOverlays().set(myOverlayIndex,myLocationOverlay);
+	      }else{
+	    	   myOverlayIndex = mMapView.getOverlays().size();
+	    	   mMapView.getOverlays().add(myLocationOverlay);
+	      }
 	      mMapView.refresh();
 	      mMapView.getController().animateTo(new GeoPoint((int)(locData.latitude*1e6), (int)(locData.longitude* 1e6)));  
 	    }
