@@ -6,11 +6,28 @@ import android.content.Intent;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.EditText;
+
 import com.baidu.mapapi.BMapManager;
 import com.baidu.mapapi.map.LocationData;
 import com.baidu.mapapi.map.MapController;
 import com.baidu.mapapi.map.MapView;
 import com.baidu.mapapi.map.MyLocationOverlay;
+import com.baidu.mapapi.map.RouteOverlay;
+import com.baidu.mapapi.search.MKAddrInfo;
+import com.baidu.mapapi.search.MKBusLineResult;
+import com.baidu.mapapi.search.MKDrivingRouteResult;
+import com.baidu.mapapi.search.MKPlanNode;
+import com.baidu.mapapi.search.MKPoiResult;
+import com.baidu.mapapi.search.MKSearch;
+import com.baidu.mapapi.search.MKSearchListener;
+import com.baidu.mapapi.search.MKShareUrlResult;
+import com.baidu.mapapi.search.MKSuggestionResult;
+import com.baidu.mapapi.search.MKTransitRouteResult;
+import com.baidu.mapapi.search.MKWalkingRouteResult;
 import com.baidu.platform.comapi.basestruct.GeoPoint;
 import com.baidu.location.BDLocation;
 import com.baidu.location.BDLocationListener;
@@ -19,20 +36,31 @@ import com.baidu.location.LocationClientOption;
 
 
 public class MainActivity extends Activity {
-	BMapManager mBMapMan = null;  
-	MapView mMapView = null;  
-
+	private static final OnClickListener BusListener = null;
+	private LocationData locData = new LocationData();
+	private BMapManager mBMapMan = null;  
+	private MapView mMapView = null;  
+	private double mFriendLatitude = 0;
+	private double mFriendLongitude = 0;
 	private LocationClient mLocationClient=null;
 	public BDLocationListener myListener = new MyLocationListener();
 	
 	//我的位置覆盖物  
 	private MyLocationOverlay myLocationOverlay; 
+	
+	private RouteOverlay mRouteOverlay;
 	//位置在图层中的索引  
 	private int myOverlayIndex=0;
-	//是否定位到我的位置 
-	private boolean bmyLocal=true;  
+	private boolean mMyself = true;
 	
 	StringBuffer sb = new StringBuffer(256);
+	private Button btnCar;
+	private Button btnBus;
+	private Button btnRun;
+	private EditText tvLatitude;
+	private EditText tvLongitude;
+	
+	private MKSearch mMKSearch = new MKSearch();
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +83,7 @@ public class MainActivity extends Activity {
 		mLocationClient=new LocationClient(getApplicationContext());
 		
 		myLocationOverlay=new MyLocationOverlay(mMapView);
+		mRouteOverlay = new RouteOverlay(MainActivity.this, mMapView);
 
 		LocationClientOption option=new LocationClientOption();
 		option.setOpenGps(true);
@@ -70,6 +99,46 @@ public class MainActivity extends Activity {
 		mLocationClient.setLocOption(option);
 		//注册位置监听
 		mLocationClient.registerLocationListener(myListener);
+		if(mLocationClient != null && !mLocationClient.isStarted()) 
+		{
+			mLocationClient.start();
+		}
+		
+		btnCar = (Button) findViewById(R.id.car);
+		btnBus = (Button) findViewById(R.id.bus);
+		btnRun = (Button) findViewById(R.id.run);
+		
+		tvLatitude = (EditText) findViewById(R.id.latitude);
+		tvLongitude = (EditText) findViewById(R.id.longitude);
+		
+		btnCar.setOnClickListener(new CarListener());
+		btnBus.setOnClickListener(new BusListener());
+		btnRun.setOnClickListener(new RunListener());
+	}
+	
+	public void getFriendInfo(){
+		mFriendLatitude = Double.parseDouble(tvLatitude.getText().toString());
+		mFriendLongitude = Double.parseDouble(tvLongitude.getText().toString());
+	}
+	
+	class BusListener  implements OnClickListener {
+		public void onClick(View v){
+		}
+	}
+	
+	class CarListener  implements OnClickListener {
+		public void onClick(View v){
+			mMyself = false;
+			mLocationClient.requestLocation();
+			mMKSearch.init(mBMapMan, new BusMKSearchListener());
+			ByCar();
+		}
+	}
+	
+	class RunListener  implements OnClickListener {
+		public void onClick(View v){
+			
+		}
 	}
 	
 	public void setLocationInfo(BDLocation location, boolean Poi){
@@ -115,21 +184,13 @@ public class MainActivity extends Activity {
 	          return ;
 	      setLocationInfo(location, false);
 	      
-	       
-	      LocationData locData = new LocationData();
-	      
 	      locData.latitude = location.getLatitude();
 	      locData.longitude = location.getLongitude();
 	      locData.direction = 2.0f;
-	      myLocationOverlay.setData(locData); 
-	      if(mMapView.getOverlays().contains(myLocationOverlay)){
-	    	   mMapView.getOverlays().set(myOverlayIndex,myLocationOverlay);
-	      }else{
-	    	   myOverlayIndex = mMapView.getOverlays().size();
-	    	   mMapView.getOverlays().add(myLocationOverlay);
+	      
+	      if(mMyself){
+	    	  showLocalInfo();
 	      }
-	      mMapView.refresh();
-	      mMapView.getController().animateTo(new GeoPoint((int)(locData.latitude*1e6), (int)(locData.longitude* 1e6)));  
 	    }
 	    public void onReceivePoi(BDLocation poiLocation) {
 	    	//将在下个版本中去除poi功能
@@ -153,17 +214,18 @@ public class MainActivity extends Activity {
 	{
 		switch(item.getItemId())
 		{
-		case 1: //我的位置
-			bmyLocal=true;  
+		case 1: 
+			//我的位置
+			mMyself = true;
 			//如果客户端定位服务已经启动过了，则直接发起定位请求
 			if(mLocationClient != null && mLocationClient.isStarted()) 
 			{
-				 mLocationClient.requestLocation();  
+				 mLocationClient.requestLocation();
 			}
 			else
 			{
 				//启动定位服务，启动的时候会自动发起定位请求，默认为requestLocation
-				mLocationClient.start(); 
+				mLocationClient.start();
 			}
 			break;
 		case 2:
@@ -205,5 +267,74 @@ public class MainActivity extends Activity {
         	mBMapMan.start();
         }
         super.onResume();
+	}
+	
+	public void ByCar(){
+		getFriendInfo();
+		MKPlanNode start = new MKPlanNode();
+		start.pt = new GeoPoint((int)(locData.latitude*1e6), (int)(locData.longitude* 1e6));
+		MKPlanNode end = new MKPlanNode();
+		end.pt = new GeoPoint((int)(mFriendLatitude*1e6), (int)(mFriendLongitude*1e6));// 设置驾车路线搜索策略，时间优先、费用最少或距离最短
+		mMKSearch.setDrivingPolicy(MKSearch.ECAR_TIME_FIRST);
+		mMKSearch.drivingSearch(null, start, null, end);
+	}
+	
+	class BusMKSearchListener implements MKSearchListener{
+		
+		public void onGetDrivingRouteResult(MKDrivingRouteResult result, int iError) {
+			if (result == null) {
+				return;
+			}
+			mRouteOverlay.setData(result.getPlan(0).getRoute(0));
+			
+		    if(mMapView.getOverlays().contains(mRouteOverlay)){
+		    	mMapView.getOverlays().set(myOverlayIndex,mRouteOverlay);
+		    }else{
+		    	myOverlayIndex = mMapView.getOverlays().size();
+		    	mMapView.getOverlays().add(mRouteOverlay);
+		    }
+			mMapView.refresh();
+		}
+		public void onGetTransitRouteResult(MKTransitRouteResult res,
+				int error) {
+		}
+
+		public void onGetWalkingRouteResult(MKWalkingRouteResult res,
+				int error) { 
+		}
+		public void onGetAddrResult(MKAddrInfo res, int error) {
+		}
+		public void onGetPoiResult(MKPoiResult res, int arg1, int arg2) {
+		}
+		public void onGetBusDetailResult(MKBusLineResult result, int iError) {
+		}
+
+		@Override
+		public void onGetSuggestionResult(MKSuggestionResult res, int arg1) {
+		}
+
+		@Override
+		public void onGetPoiDetailSearchResult(int type, int iError) {
+			// TODO Auto-generated method stub
+		}
+
+		@Override
+		public void onGetShareUrlResult(MKShareUrlResult result, int type,
+				int error) {
+			// TODO Auto-generated method stub
+			
+		}
+    }
+		
+	public void  showLocalInfo(){
+		myLocationOverlay.setData(locData); 
+	      if(mMapView.getOverlays().contains(myLocationOverlay)){
+	    	   mMapView.getOverlays().set(myOverlayIndex,myLocationOverlay);
+	      }else{
+	    	   myOverlayIndex = mMapView.getOverlays().size();
+	    	   mMapView.getOverlays().add(myLocationOverlay);
+	      }
+	      mMapView.refresh();
+	      mMapView.getController().animateTo(new GeoPoint((int)(locData.latitude*1e6), (int)(locData.longitude* 1e6))); 
 	}
 }
