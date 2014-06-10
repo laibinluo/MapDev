@@ -6,5 +6,6 @@
     <string name="hello_world">Hello world!</string>
     <string name="location">我的位置</string>
     <string name="info">地址详细信息</string>
+    <string name="exit">退出</string>
 
 </resources>

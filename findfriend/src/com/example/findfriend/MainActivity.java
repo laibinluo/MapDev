@@ -17,6 +17,7 @@ import com.baidu.mapapi.map.MapController;
 import com.baidu.mapapi.map.MapView;
 import com.baidu.mapapi.map.MyLocationOverlay;
 import com.baidu.mapapi.map.RouteOverlay;
+import com.baidu.mapapi.map.TransitOverlay;
 import com.baidu.mapapi.search.MKAddrInfo;
 import com.baidu.mapapi.search.MKBusLineResult;
 import com.baidu.mapapi.search.MKDrivingRouteResult;
@@ -48,7 +49,9 @@ public class MainActivity extends Activity {
 	//我的位置覆盖物  
 	private MyLocationOverlay myLocationOverlay; 
 	
-	private RouteOverlay mRouteOverlay;
+	private RouteOverlay mWalkingRouteOverlay;
+	private TransitOverlay  mBusRouteOverlay;
+	private RouteOverlay mCarRouteOverlay;
 	//位置在图层中的索引  
 	private int myOverlayIndex=0;
 	private boolean mMyself = true;
@@ -56,9 +59,11 @@ public class MainActivity extends Activity {
 	StringBuffer sb = new StringBuffer(256);
 	private Button btnCar;
 	private Button btnBus;
-	private Button btnRun;
+	private Button btnWalking;
 	private EditText tvLatitude;
 	private EditText tvLongitude;
+	
+	private String strCity;
 	
 	private MKSearch mMKSearch = new MKSearch();
 	
@@ -83,7 +88,11 @@ public class MainActivity extends Activity {
 		mLocationClient=new LocationClient(getApplicationContext());
 		
 		myLocationOverlay=new MyLocationOverlay(mMapView);
-		mRouteOverlay = new RouteOverlay(MainActivity.this, mMapView);
+		
+		mWalkingRouteOverlay = new RouteOverlay(MainActivity.this, mMapView);
+		mBusRouteOverlay = new TransitOverlay(MainActivity.this, mMapView);
+		mCarRouteOverlay = new RouteOverlay(MainActivity.this, mMapView);
+		
 
 		LocationClientOption option=new LocationClientOption();
 		option.setOpenGps(true);
@@ -106,14 +115,14 @@ public class MainActivity extends Activity {
 		
 		btnCar = (Button) findViewById(R.id.car);
 		btnBus = (Button) findViewById(R.id.bus);
-		btnRun = (Button) findViewById(R.id.run);
+		btnWalking = (Button) findViewById(R.id.walking);
 		
 		tvLatitude = (EditText) findViewById(R.id.latitude);
 		tvLongitude = (EditText) findViewById(R.id.longitude);
 		
 		btnCar.setOnClickListener(new CarListener());
 		btnBus.setOnClickListener(new BusListener());
-		btnRun.setOnClickListener(new RunListener());
+		btnWalking.setOnClickListener(new WalkingListener());
 	}
 	
 	public void getFriendInfo(){
@@ -123,6 +132,10 @@ public class MainActivity extends Activity {
 	
 	class BusListener  implements OnClickListener {
 		public void onClick(View v){
+			mMyself = false;
+			mLocationClient.requestLocation();
+			mMKSearch.init(mBMapMan, new ComMKSearchListener());
+			ByBus();
 		}
 	}
 	
@@ -130,19 +143,23 @@ public class MainActivity extends Activity {
 		public void onClick(View v){
 			mMyself = false;
 			mLocationClient.requestLocation();
-			mMKSearch.init(mBMapMan, new BusMKSearchListener());
+			mMKSearch.init(mBMapMan, new ComMKSearchListener());
 			ByCar();
 		}
 	}
 	
-	class RunListener  implements OnClickListener {
+	class WalkingListener implements OnClickListener {
 		public void onClick(View v){
-			
+			mMyself = false;
+			mLocationClient.requestLocation();
+			mMKSearch.init(mBMapMan, new ComMKSearchListener());
+			ByWalking();
 		}
 	}
 	
 	public void setLocationInfo(BDLocation location, boolean Poi){
 		sb.setLength(0);
+		strCity=location.getCity();
 		sb.append("当前时间 : ");
 	      sb.append(location.getTime());
 	      sb.append("\n错误码 : ");
@@ -206,6 +223,7 @@ public class MainActivity extends Activity {
 	public boolean onCreateOptionsMenu(Menu menu) { 
 		 menu.add(0, 1, 1, R.string.location);
 		 menu.add(0, 2, 2, R.string.info);
+		 menu.add(0, 3, 3, R.string.exit);
 		 return super.onCreateOptionsMenu(menu);
 	}
 	
@@ -237,7 +255,11 @@ public class MainActivity extends Activity {
 			intent.putExtras(bundle);
 			startActivity(intent);
 			break;
-		}
+		case 3:
+			finish();
+			System.exit(0);  
+			break;
+		}		
 		return true;
 	}
 	
@@ -247,6 +269,9 @@ public class MainActivity extends Activity {
 			mLocationClient.stop(); 
         mMapView.destroy();
         if(mBMapMan!=null){
+        		if(mMKSearch != null){
+        			mMKSearch.destory();
+        		}
                 mBMapMan.destroy();
                 mBMapMan=null;
         }
@@ -279,28 +304,50 @@ public class MainActivity extends Activity {
 		mMKSearch.drivingSearch(null, start, null, end);
 	}
 	
-	class BusMKSearchListener implements MKSearchListener{
+	public void ByBus(){
+		getFriendInfo();
+		MKPlanNode start = new MKPlanNode();
+		start.pt = new GeoPoint((int)(locData.latitude*1e6), (int)(locData.longitude* 1e6));
+		MKPlanNode end = new MKPlanNode();
+		end.pt = new GeoPoint((int)(mFriendLatitude*1e6), (int)(mFriendLongitude*1e6));// 设置驾车路线搜索策略，时间优先、费用最少或距离最短
+		mMKSearch.setTransitPolicy(MKSearch.EBUS_TIME_FIRST);
+		mMKSearch.transitSearch(strCity, start, end);
+	}
+	
+	public void ByWalking(){
+		getFriendInfo();
+		MKPlanNode start = new MKPlanNode();
+		start.pt = new GeoPoint((int)(locData.latitude*1e6), (int)(locData.longitude* 1e6));
+		MKPlanNode end = new MKPlanNode();
+		end.pt = new GeoPoint((int)(mFriendLatitude*1e6), (int)(mFriendLongitude*1e6));// 设置驾车路线搜索策略，时间优先、费用最少或距离最短
+		mMKSearch.walkingSearch(null, start, null, end);
+	}
+	
+	class ComMKSearchListener implements MKSearchListener{
 		
 		public void onGetDrivingRouteResult(MKDrivingRouteResult result, int iError) {
 			if (result == null) {
 				return;
 			}
-			mRouteOverlay.setData(result.getPlan(0).getRoute(0));
-			
-		    if(mMapView.getOverlays().contains(mRouteOverlay)){
-		    	mMapView.getOverlays().set(myOverlayIndex,mRouteOverlay);
-		    }else{
-		    	myOverlayIndex = mMapView.getOverlays().size();
-		    	mMapView.getOverlays().add(mRouteOverlay);
-		    }
+			mCarRouteOverlay.setData(result.getPlan(0).getRoute(0));
+			mMapView.getOverlays().clear();
+		    mMapView.getOverlays().add(mCarRouteOverlay);
 			mMapView.refresh();
 		}
 		public void onGetTransitRouteResult(MKTransitRouteResult res,
 				int error) {
+			mBusRouteOverlay.setData(res.getPlan(0));
+			mMapView.getOverlays().clear();
+		    mMapView.getOverlays().add(mBusRouteOverlay);
+			mMapView.refresh();
 		}
 
 		public void onGetWalkingRouteResult(MKWalkingRouteResult res,
 				int error) { 
+			mWalkingRouteOverlay.setData(res.getPlan(0).getRoute(0));
+			mMapView.getOverlays().clear();
+		    mMapView.getOverlays().add(mWalkingRouteOverlay);
+			mMapView.refresh();
 		}
 		public void onGetAddrResult(MKAddrInfo res, int error) {
 		}
@@ -328,6 +375,7 @@ public class MainActivity extends Activity {
 		
 	public void  showLocalInfo(){
 		myLocationOverlay.setData(locData); 
+		mMapView.getOverlays().clear();
 	      if(mMapView.getOverlays().contains(myLocationOverlay)){
 	    	   mMapView.getOverlays().set(myOverlayIndex,myLocationOverlay);
 	      }else{
