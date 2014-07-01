@@ -5,7 +5,6 @@ import android.os.Bundle;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 
@@ -24,7 +23,6 @@ public class LocationInfo extends Activity {
     private int BUFF_SIZE = 512;
     
     private Socket socket = null;
-    private OutputStream outStream = null;
     
     private static final String IP = "192.168.33.110";
     private static final int port = 6666;
