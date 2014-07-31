@@ -32,6 +32,8 @@ public class LocationInfo extends Activity {
 		
         setContentView(R.layout.location_info);
         
+        
+        
         mEditText = (EditText)this.findViewById(R.id.edittext);
         connectButton = (Button)this.findViewById(R.id.connectbutton);
         sendButton = (Button)this.findViewById(R.id.sendbutton);
